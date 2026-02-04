@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pró-rata por Mês de Referência (28/29/30/31)</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f6f7fb;margin:0;color:#111}
+    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e7e7ef;border-radius:14px;box-shadow:0 6px 18px rgba(17,17,17,.06)}
+    header{padding:18px 18px 0}
+    h1{font-size:18px;margin:0 0 6px}
+    p{margin:0 0 14px;color:#444;font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:18px}
+    .field{grid-column:span 12}
+    @media(min-width:900px){.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}}
+    label{display:block;font-size:12px;color:#333;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #d9d9e6;font-size:14px;background:#fff;outline:none}
+    input:focus,select:focus{border-color:#6b7cff;box-shadow:0 0 0 3px rgba(107,124,255,.15)}
+    .btn{background:#2f49ff;color:#fff;border:0;border-radius:10px;padding:10px 12px;font-size:14px;cursor:pointer}
+    .ghost{background:#f0f2ff;color:#1b2ad6}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .results{padding:0 18px 18px}
+    .box{border:1px dashed #d6d9ff;background:#f7f8ff;border-radius:12px;padding:14px;display:grid;gap:8px}
+    .kpi{display:grid;grid-template-columns:190px 1fr;gap:8px;align-items:center}
+    .kpi span{font-size:13px;color:#333}
+    .kpi strong{font-size:14px}
+    .warn{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff3cd;border:1px solid #ffe69c;color:#664d03;font-size:12px;display:none}
+    footer{padding:0 18px 18px;color:#666;font-size:12px;line-height:1.45}
+    code{background:rgba(0,0,0,.06);padding:1px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <h1>Calculadora Pró-rata (considerando mês de referência real)</h1>
+        <p>Divide o valor mensal pelos dias do <b>mês de referência</b> (28/29/30/31) e aplica aos dias proporcionais.</p>
+      </header>
+
+      <div class="grid">
+        <div class="field col-3">
+          <label for="tipo">Tipo</label>
+          <select id="tipo">
+            <option value="pre">Pré-pago</option>
+            <option value="pos">Pós-pago</option>
+          </select>
+        </div>
+
+        <div class="field col-3">
+          <label for="valorMensal">Valor mensal (R$)</label>
+          <input id="valorMensal" type="text" inputmode="decimal" value="99,90" />
+        </div>
+
+        <div class="field col-3">
+          <label for="mesRefModo">Mês de referência</label>
+          <select id="mesRefModo">
+            <option value="auto">Automático (recomendado)</option>
+            <option value="manual">Escolher manualmente</option>
+          </select>
+        </div>
+
+        <div class="field col-3">
+          <label for="arred">Arredondamento</label>
+          <select id="arred">
+            <option value="2">2 casas</option>
+            <option value="0">Sem centavos</option>
+            <option value="nao">Não arredondar</option>
+          </select>
+        </div>
+
+        <div class="field col-4">
+          <label for="vencAntigo">Vencimento antigo</label>
+          <input id="vencAntigo" type="date" />
+        </div>
+
+        <div class="field col-4">
+          <label for="vencNovo">Novo vencimento</label>
+          <input id="vencNovo" type="date" />
+        </div>
+
+        <div class="field col-4" id="mesRefManualWrap" style="display:none">
+          <label for="mesRefManual">Mês ref (ano-mês)</label>
+          <input id="mesRefManual" type="month" />
+        </div>
+
+        <div class="field col-12">
+          <div class="row">
+            <button class="btn ghost" id="btnExemplo" type="button">Exemplo 26/01 → 04/03</button>
+            <button class="btn" id="btnCalcular" type="button">Calcular</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="results">
+        <div class="box">
+          <div class="kpi"><span>Período pró-rata</span><strong id="periodoTxt">—</strong></div>
+          <div class="kpi"><span>Dias proporcionais</span><strong id="diasTxt">—</strong></div>
+          <div class="kpi"><span>Mês de referência</span><strong id="mesRefTxt">—</strong></div>
+          <div class="kpi"><span>Dias do mês ref</span><strong id="diasMesTxt">—</strong></div>
+          <div class="kpi"><span>Valor diário</span><strong id="diariaTxt">—</strong></div>
+          <div class="kpi"><span>Valor pró-rata</span><strong id="proRataTxt">—</strong></div>
+        </div>
+        <div id="warn" class="warn"></div>
+      </div>
+
+      <footer>
+        <b>Regras do período:</b><br/>
+        • <b>Pré-pago</b>: de <code>vencimento antigo + 1</code> até <code>novo vencimento</code> (inclusive).<br/>
+        • <b>Pós-pago</b>: de <code>vencimento antigo</code> até <code>novo vencimento - 1</code> (inclusive).<br/><br/>
+        <b>Automático (mês de referência):</b><br/>
+        • Pré-pago: usa o mês do <code>novo vencimento</code><br/>
+        • Pós-pago: usa o mês do <code>vencimento antigo</code><br/>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    function parseBRL(v){
+      v = (v||"").toString().trim().replace(/[R$\s]/g,"");
+      v = v.replace(/\./g,"").replace(",",".");
+      const n = Number(v);
+      return Number.isFinite(n) ? n : NaN;
+    }
+    function formatBRL(n, arred){
+      if(!Number.isFinite(n)) return "—";
+      let x=n;
+      if(arred!=="nao"){
+        const casas=Number(arred);
+        if(Number.isFinite(casas)){
+          const p=Math.pow(10,casas);
+          x=Math.round(x*p)/p;
+        }
+      }
+      return x.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+    }
+    function toDateOnly(dStr){
+      if(!dStr) return null;
+      const [y,m,d]=dStr.split("-").map(Number);
+      if(!y||!m||!d) return null;
+      return new Date(y,m-1,d,12,0,0);
+    }
+    function addDays(date,days){
+      const d=new Date(date);
+      d.setDate(d.getDate()+days);
+      return d;
+    }
+    function daysBetweenInclusive(a,b){
+      const ms=24*60*60*1000;
+      const start=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+      const end  =new Date(b.getFullYear(),b.getMonth(),b.getDate());
+      const diff=Math.round((end-start)/ms);
+      return diff+1;
+    }
+    function fmtDateBR(d){
+      const dd=String(d.getDate()).padStart(2,"0");
+      const mm=String(d.getMonth()+1).padStart(2,"0");
+      const yy=d.getFullYear();
+      return `${dd}/${mm}/${yy}`;
+    }
+    function daysInMonth(year, month1to12){
+      // month1to12: 1..12
+      return new Date(year, month1to12, 0).getDate();
+    }
+    function ymLabel(y,m1){
+      return `${String(m1).padStart(2,"0")}/${y}`;
+    }
+
+    function getMesRefAuto(tipo, vencAntigo, vencNovo){
+      // Se sua regra for outra, mude aqui:
+      // Ex.: sempre usar mês do "novo vencimento" para ambos:
+      // return {y: vencNovo.getFullYear(), m1: vencNovo.getMonth()+1};
+      if(tipo==="pre"){
+        return {y: vencNovo.getFullYear(), m1: vencNovo.getMonth()+1};
+      }
+      return {y: vencAntigo.getFullYear(), m1: vencAntigo.getMonth()+1};
+    }
+
+    function calcular(){
+      const tipo=document.getElementById("tipo").value;
+      const valorMensal=parseBRL(document.getElementById("valorMensal").value);
+      const mesRefModo=document.getElementById("mesRefModo").value;
+      const arred=document.getElementById("arred").value;
+      const vencAntigo=toDateOnly(document.getElementById("vencAntigo").value);
+      const vencNovo=toDateOnly(document.getElementById("vencNovo").value);
+      const warn=document.getElementById("warn");
+      warn.style.display="none"; warn.textContent="";
+
+      if(!Number.isFinite(valorMensal) || valorMensal<=0){
+        warn.style.display="block"; warn.textContent="Informe um valor mensal válido (maior que zero)."; return;
+      }
+      if(!vencAntigo || !vencNovo){
+        warn.style.display="block"; warn.textContent="Informe as duas datas."; return;
+      }
+
+      let inicio,fim;
+      if(tipo==="pre"){ inicio=addDays(vencAntigo,1); fim=vencNovo; }
+      else { inicio=vencAntigo; fim=addDays(vencNovo,-1); }
+
+      if(fim < inicio){
+        warn.style.display="block";
+        warn.textContent="Intervalo inválido para o tipo escolhido (novo vencimento muito próximo/menor).";
+        return;
+      }
+
+      const dias = daysBetweenInclusive(inicio,fim);
+
+      // Mês de referência (auto ou manual)
+      let y,m1;
+      if(mesRefModo==="manual"){
+        const val=document.getElementById("mesRefManual").value; // YYYY-MM
+        if(!val){
+          warn.style.display="block"; warn.textContent="Escolha o mês de referência (ano-mês)."; return;
+        }
+        const [yy,mm]=val.split("-").map(Number);
+        y=yy; m1=mm;
+      } else {
+        const ref=getMesRefAuto(tipo, vencAntigo, vencNovo);
+        y=ref.y; m1=ref.m1;
+      }
+
+      const diasMes = daysInMonth(y,m1);
+      const diaria = valorMensal / diasMes;
+      const proRata = diaria * dias;
+
+      document.getElementById("periodoTxt").textContent =
+        `${fmtDateBR(inicio)} até ${fmtDateBR(fim)} (${tipo==="pre"?"Pré-pago":"Pós-pago"})`;
+      document.getElementById("diasTxt").textContent = `${dias} dia(s)`;
+      document.getElementById("mesRefTxt").textContent = ymLabel(y,m1);
+      document.getElementById("diasMesTxt").textContent = `${diasMes} dia(s)`;
+      document.getElementById("diariaTxt").textContent = `${formatBRL(diaria, arred)}`;
+      document.getElementById("proRataTxt").textContent = `${formatBRL(proRata, arred)}`;
+
+      if(dias > diasMes){
+        warn.style.display="block";
+        warn.textContent="Atenção: dias proporcionais maiores que os dias do mês de referência. Isso pode acontecer quando o período atravessa meses; confira se esta é a regra do seu faturamento.";
+      }
+    }
+
+    (function init(){
+      const hoje=new Date();
+      const d1=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate());
+      const d2=addDays(d1,30);
+
+      function toInputDate(d){
+        const y=d.getFullYear();
+        const m=String(d.getMonth()+1).padStart(2,"0");
+        const day=String(d.getDate()).padStart(2,"0");
+        return `${y}-${m}-${day}`;
+      }
+      function toInputMonth(d){
+        const y=d.getFullYear();
+        const m=String(d.getMonth()+1).padStart(2,"0");
+        return `${y}-${m}`;
+      }
+
+      document.getElementById("vencAntigo").value=toInputDate(d1);
+      document.getElementById("vencNovo").value=toInputDate(d2);
+      document.getElementById("mesRefManual").value=toInputMonth(d1);
+
+      const wrap=document.getElementById("mesRefManualWrap");
+      document.getElementById("mesRefModo").addEventListener("change", (e)=>{
+        wrap.style.display = (e.target.value==="manual") ? "block" : "none";
+        calcular();
+      });
+
+      document.getElementById("btnCalcular").addEventListener("click", calcular);
+      document.getElementById("btnExemplo").addEventListener("click", ()=>{
+        document.getElementById("vencAntigo").value="2026-01-26";
+        document.getElementById("vencNovo").value="2026-03-04";
+        document.getElementById("mesRefManual").value="2026-03";
+        calcular();
+      });
+
+      ["tipo","valorMensal","arred","vencAntigo","vencNovo","mesRefManual"].forEach(id=>{
+        const el=document.getElementById(id);
+        el.addEventListener("change", calcular);
+      });
+
+      calcular();
+    })();
+  </script>
+</body>
+</html>
